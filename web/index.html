@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Időmérő</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117; --surface: #16191f; --surface2: #1e2128; --surface3: #262b35;
+      --border: rgba(255,255,255,.07); --border2: rgba(255,255,255,.12);
+      --text: #f0f2f8; --text2: #9ba3b5; --text3: #6a7385;
+      --accent: #5b8dee; --accent-hover: #4a7de0; --accent-dim: rgba(91,141,238,.12);
+      --danger: #e05c5c; --danger-hover: #cc4a4a; --danger-dim: rgba(224,92,92,.1);
+      --radius: 10px; --radius-sm: 6px;
+      --shadow: 0 1px 3px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+    }
+    :root.light {
+      --bg: #f5f6f8; --surface: #ffffff; --surface2: #f0f1f4; --surface3: #e8eaee;
+      --border: rgba(0,0,0,.07); --border2: rgba(0,0,0,.12);
+      --text: #1a1d24; --text2: #555e70; --text3: #8a95a5;
+      --accent: #3d6fd4; --accent-hover: #2f5ec0; --accent-dim: rgba(61,111,212,.1);
+      --danger: #d44040; --danger-hover: #c03030; --danger-dim: rgba(212,64,64,.08);
+      --shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+    .app { max-width: 520px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+
+    .tabs { display: flex; align-items: center; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 4px; position: sticky; top: 0; z-index: 10; }
+    .tab { padding: 14px 18px; cursor: pointer; color: var(--text2); font-size: 13px; font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab:hover:not(.active) { color: var(--text); }
+    .tabs-spacer { flex: 1; }
+    .icon-btn { background: none; border: none; cursor: pointer; width: 32px; height: 32px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; color: var(--text2); font-size: 15px; transition: background .15s, color .15s; margin: 0 2px; }
+    .icon-btn:hover { background: var(--surface2); color: var(--text); }
+
+    .timer-bar { background: var(--surface); padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center; }
+    .timer-inputs { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .timer-bar input { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 11px; color: var(--text); font-size: 13px; outline: none; transition: border-color .15s; width: 100%; }
+    .timer-bar input:focus { border-color: var(--border2); }
+    .timer-bar input::placeholder { color: var(--text3); }
+    .timer-bar input:disabled { opacity: .5; cursor: not-allowed; }
+    .input-row { display: flex; gap: 4px; }
+    .timer-display { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 76px; text-align: center; color: var(--text2); }
+    .timer-display.running { color: var(--text); }
+    .btn-start { width: 38px; height: 38px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .15s, transform .1s; font-weight: 700; font-size: 13px; }
+    .btn-start:active { transform: scale(.93); }
+    .btn-start.start { background: var(--accent); color: #fff; }
+    .btn-start.start:hover { background: var(--accent-hover); }
+    .btn-start.stop { background: var(--danger-dim); color: var(--danger); border: 1px solid var(--danger); }
+    .btn-start.stop:hover { background: var(--danger); color: #fff; }
+
+    .content { flex: 1; padding: 20px 16px; }
+
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .date-header { color: var(--text3); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+    .btn-manual { font-size: 12px; padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: none; color: var(--text2); cursor: pointer; transition: all .15s; }
+    .btn-manual:hover { border-color: var(--accent); color: var(--accent); }
+
+    .entry { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; transition: border-color .15s; }
+    .entry:hover { border-color: var(--border2); }
+    .entry-info { flex: 1; }
+    .entry-project { font-weight: 600; font-size: 13px; }
+    .entry-task { color: var(--text2); font-size: 12px; margin-top: 2px; }
+    .entry-time { font-size: 11px; color: var(--text3); margin-top: 2px; }
+    .entry-duration { font-weight: 600; font-size: 12px; color: var(--text2); min-width: 60px; text-align: right; white-space: nowrap; }
+    .btn-icon { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 15px; width: 26px; height: 26px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; transition: background .15s, color .15s; flex-shrink: 0; }
+    .btn-icon:hover { color: var(--danger); background: var(--danger-dim); }
+    .btn-icon.edit:hover { color: var(--accent); background: var(--accent-dim); }
+
+    .total-row { display: flex; justify-content: space-between; padding: 10px 0 2px; border-top: 1px solid var(--border); margin-top: 6px; font-size: 12px; color: var(--text2); }
+    .total-row strong { color: var(--text); font-size: 13px; font-weight: 600; }
+
+    .empty { text-align: center; color: var(--text3); padding: 48px 0; font-size: 13px; line-height: 1.8; }
+
+    /* REPORT */
+    .report-filters { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+    .filter-btn { padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--text2); cursor: pointer; font-size: 12px; font-weight: 500; transition: all .15s; }
+    .filter-btn:hover { border-color: var(--border2); color: var(--text); }
+    .filter-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+    .date-range { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+    .date-range input[type=date] { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 10px; color: var(--text); font-size: 12px; outline: none; color-scheme: dark; }
+    :root.light .date-range input[type=date] { color-scheme: light; }
+    .date-range span { color: var(--text3); font-size: 12px; }
+    .client-filter-input { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 11px; color: var(--text); font-size: 13px; outline: none; margin-bottom: 12px; }
+    .export-btns { display: flex; gap: 8px; margin-bottom: 16px; }
+    .btn-export { padding: 6px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border2); color: var(--text2); background: var(--surface); cursor: pointer; font-size: 12px; font-weight: 500; transition: all .15s; }
+    .btn-export:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+    .report-project { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; overflow: hidden; }
+    .report-project:hover { border-color: var(--border2); }
+    .report-project-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; cursor: pointer; }
+    .report-project-name { font-weight: 600; font-size: 13px; }
+    .report-project-count { font-size: 11px; color: var(--text3); margin-top: 2px; }
+    .report-project-total { font-size: 13px; color: var(--accent); font-weight: 600; }
+    .report-chevron { color: var(--text3); font-size: 11px; margin-left: 8px; }
+    .report-entries { padding: 0 14px 10px; }
+    .report-entry { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--border); font-size: 12px; color: var(--text2); }
+    .report-entry-info { flex: 1; }
+    .report-entry-dur { color: var(--text); font-weight: 500; white-space: nowrap; }
+    .report-grand-total { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-top: 8px; color: var(--text2); }
+
+    /* MODAL */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(2px); padding: 16px; }
+    .modal { background: var(--surface); border: 1px solid var(--border2); border-radius: 14px; padding: 24px; width: 100%; max-width: 360px; box-shadow: var(--shadow); max-height: 90vh; overflow-y: auto; }
+    .modal h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+    .field input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px; color: var(--text); font-size: 13px; outline: none; transition: border-color .15s; }
+    .field input:focus { border-color: var(--border2); }
+    .field-row { display: flex; gap: 8px; }
+    .field-row .field { flex: 1; }
+    .duration-preview { text-align: center; font-size: 12px; color: var(--text2); padding: 6px; background: var(--surface2); border-radius: var(--radius-sm); margin-bottom: 14px; }
+    .modal-error { font-size: 12px; color: var(--danger); margin-bottom: 10px; }
+    .modal-btns { display: flex; gap: 8px; }
+    .btn-save { flex: 1; padding: 10px; border-radius: var(--radius-sm); border: none; background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s; }
+    .btn-save:hover { background: var(--accent-hover); }
+    .btn-cancel { flex: 1; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: none; color: var(--text2); font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-cancel:hover { background: var(--surface2); }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
+  </style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="tabs" id="tabs"></div>
+  <div id="timer-bar"></div>
+  <div class="content" id="content"></div>
+  <div id="modal-container"></div>
+</div>
+
+<script>
+// ── Storage ───────────────────────────────────────────────────
+const DB = {
+  getEntries: () => JSON.parse(localStorage.getItem('idomeroe_entries') || '[]'),
+  saveEntries: (e) => localStorage.setItem('idomeroe_entries', JSON.stringify(e)),
+  getProjects: () => JSON.parse(localStorage.getItem('idomeroe_projects') || '[]'),
+  saveProjects: (p) => localStorage.setItem('idomeroe_projects', JSON.stringify(p)),
+  getTasks: () => JSON.parse(localStorage.getItem('idomeroe_tasks') || '{}'),
+  saveTasks: (t) => localStorage.setItem('idomeroe_tasks', JSON.stringify(t)),
+
+  addEntry({ project, task, startedAt, stoppedAt, durationMs }) {
+    const entries = this.getEntries();
+    const entry = { id: crypto.randomUUID(), project: project||'', task: task||'', startedAt, stoppedAt, durationMs };
+    entries.push(entry);
+    this.saveEntries(entries);
+    this._updateProjectTask(project, task);
+    return entry;
+  },
+
+  updateEntry(id, { project, task, startedAt, stoppedAt }) {
+    const entries = this.getEntries();
+    const idx = entries.findIndex(e => e.id === id);
+    if (idx === -1) return;
+    const s = startedAt ?? entries[idx].startedAt;
+    const end = stoppedAt ?? entries[idx].stoppedAt;
+    entries[idx] = { ...entries[idx], project: project ?? entries[idx].project, task: task ?? entries[idx].task, startedAt: s, stoppedAt: end, durationMs: Math.max(0, new Date(end) - new Date(s)) };
+    this.saveEntries(entries);
+    this._updateProjectTask(entries[idx].project, entries[idx].task);
+  },
+
+  deleteEntry(id) {
+    this.saveEntries(this.getEntries().filter(e => e.id !== id));
+  },
+
+  _updateProjectTask(project, task) {
+    if (!project) return;
+    const projects = this.getProjects();
+    if (!projects.find(p => p.toLowerCase() === project.toLowerCase())) {
+      projects.push(project); this.saveProjects(projects);
+    }
+    if (task) {
+      const tasks = this.getTasks();
+      const key = project.toLowerCase();
+      if (!tasks[key]) tasks[key] = [];
+      if (!tasks[key].find(t => t.toLowerCase() === task.toLowerCase())) {
+        tasks[key].push(task); this.saveTasks(tasks);
+      }
+    }
+  },
+
+  getTodayEntries() {
+    const today = new Date().toDateString();
+    return this.getEntries().filter(e => new Date(e.startedAt).toDateString() === today);
+  },
+
+  getEntriesInRange(from, to) {
+    const f = new Date(from).getTime(), t = new Date(to).getTime();
+    return this.getEntries().filter(e => { const d = new Date(e.startedAt).getTime(); return d >= f && d <= t; });
+  }
+};
+
+// ── Timer state ───────────────────────────────────────────────
+const timer = { state: 'STOPPED', startedAt: null, project: '', task: '' };
+let timerInterval = null;
+
+function timerStart(project, task) {
+  timer.state = 'RUNNING'; timer.startedAt = Date.now(); timer.project = project; timer.task = task;
+  timerInterval = setInterval(renderTimerDisplay, 1000);
+  renderTimerBar(); renderTimerDisplay();
+}
+
+function timerStop() {
+  if (timer.state !== 'RUNNING') return;
+  clearInterval(timerInterval);
+  const durationMs = Date.now() - timer.startedAt;
+  if (durationMs > 1000) {
+    DB.addEntry({ project: timer.project, task: timer.task, startedAt: new Date(timer.startedAt).toISOString(), stoppedAt: new Date().toISOString(), durationMs });
+  }
+  timer.state = 'STOPPED'; timer.startedAt = null;
+  renderTimerBar(); renderTimerDisplay(); renderContent();
+}
+
+function getElapsedMs() {
+  if (timer.state !== 'RUNNING') return 0;
+  return Date.now() - timer.startedAt;
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+let darkMode = localStorage.getItem('idomeroe_dark') !== 'false';
+function toggleTheme() {
+  darkMode = !darkMode;
+  localStorage.setItem('idomeroe_dark', darkMode);
+  document.documentElement.classList.toggle('light', !darkMode);
+  renderTabs();
+}
+
+function fmtMs(ms) {
+  const s = Math.floor(ms/1000), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  return [h,m,sec].map(n=>String(n).padStart(2,'0')).join(':');
+}
+function fmtDur(ms) {
+  const s = Math.floor(ms/1000), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  if (h>0) return `${h}ó ${m}p ${sec}mp`;
+  if (m>0) return `${m}p ${sec}mp`;
+  return `${sec}mp`;
+}
+function fmtTime(iso) { return new Date(iso).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'}); }
+function fmtDate(iso) { return new Date(iso).toLocaleDateString('hu-HU'); }
+function toDateStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function toTimeStr(iso) { const d=new Date(iso); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`; }
+function today() { const d=new Date(); d.setHours(0,0,0,0); return d; }
+function weekStart() { const d=today(); d.setDate(d.getDate()-((d.getDay()+6)%7)); return d; }
+function monthStart() { const d=today(); d.setDate(1); return d; }
+function endOfDay(d) { const e=new Date(d); e.setHours(23,59,59,999); return e; }
+
+// ── State ─────────────────────────────────────────────────────
+let activeTab = 'timer';
+let reportFilter = 'today';
+let reportFrom = toDateStr(today());
+let reportTo = toDateStr(new Date());
+let clientFilter = '';
+let openGroups = {};
+
+// ── Render: Tabs ──────────────────────────────────────────────
+function renderTabs() {
+  document.getElementById('tabs').innerHTML = `
+    <div class="tab ${activeTab==='timer'?'active':''}" onclick="setTab('timer')">Időmérő</div>
+    <div class="tab ${activeTab==='report'?'active':''}" onclick="setTab('report')">Riport</div>
+    <div class="tabs-spacer"></div>
+    <button class="icon-btn" onclick="toggleTheme()" title="Téma">${darkMode?'☀':'☾'}</button>
+  `;
+}
+function setTab(t) { activeTab=t; renderTabs(); renderContent(); }
+
+// ── Render: Timer bar ─────────────────────────────────────────
+function renderTimerBar() {
+  const running = timer.state === 'RUNNING';
+  const projects = DB.getProjects();
+  document.getElementById('timer-bar').innerHTML = `
+    <div class="timer-bar">
+      <div class="timer-inputs">
+        <div class="input-row">
+          <input list="proj-list" id="inp-project" placeholder="Ügyfél neve..." value="${running ? timer.project : ''}" ${running?'disabled':''} style="flex:1" oninput="onProjectInput(this.value)">
+          <datalist id="proj-list">${projects.map(p=>`<option value="${p}">`).join('')}</datalist>
+        </div>
+        <input list="task-list" id="inp-task" placeholder="Feladat leírása..." value="${running ? timer.task : ''}" ${running?'disabled':''}>
+        <datalist id="task-list" id="task-list"></datalist>
+      </div>
+      <div class="timer-display ${running?'running':''}" id="timer-display">${fmtMs(getElapsedMs())}</div>
+      <button class="btn-start ${running?'stop':'start'}" onclick="${running?'timerStop()':'handleStart()'}">
+        ${running?'■':'▶'}
+      </button>
+    </div>
+  `;
+  if (!running) {
+    const savedProject = localStorage.getItem('idomeroe_last_project')||'';
+    if (savedProject) document.getElementById('inp-project').value = savedProject;
+    updateTaskList(document.getElementById('inp-project').value);
+  }
+}
+
+function renderTimerDisplay() {
+  const el = document.getElementById('timer-display');
+  if (el) el.textContent = fmtMs(getElapsedMs());
+}
+
+function onProjectInput(val) {
+  updateTaskList(val);
+}
+
+function updateTaskList(project) {
+  const tasks = DB.getTasks();
+  const list = document.getElementById('task-list');
+  if (!list) return;
+  const key = project.toLowerCase();
+  list.innerHTML = (tasks[key]||[]).map(t=>`<option value="${t}">`).join('');
+}
+
+function handleStart() {
+  const project = document.getElementById('inp-project')?.value.trim()||'';
+  const task = document.getElementById('inp-task')?.value.trim()||'';
+  localStorage.setItem('idomeroe_last_project', project);
+  timerStart(project, task);
+}
+
+// ── Render: Content ───────────────────────────────────────────
+function renderContent() {
+  if (activeTab === 'timer') renderEntryList();
+  else renderReport();
+}
+
+// ── Entry List ────────────────────────────────────────────────
+function renderEntryList() {
+  const entries = DB.getTodayEntries().slice().reverse();
+  const total = entries.reduce((s,e)=>s+e.durationMs,0);
+  let html = `
+    <div class="section-header">
+      <div class="date-header">Ma — ${new Date().toLocaleDateString('hu-HU')}</div>
+      <button class="btn-manual" onclick="openEditModal(null)">+ Manuális</button>
+    </div>
+  `;
+  if (entries.length === 0) {
+    html += `<div class="empty">Még nincs mai bejegyzés.<br>Indítsd el az időmérőt!</div>`;
+  } else {
+    html += entries.map(e => `
+      <div class="entry">
+        <div class="entry-info">
+          <div class="entry-project">${e.project||'<span style="color:var(--text2)">Névtelen</span>'}</div>
+          ${e.task?`<div class="entry-task">${e.task}</div>`:''}
+          <div class="entry-time">${fmtTime(e.startedAt)} – ${fmtTime(e.stoppedAt)}</div>
+        </div>
+        <div class="entry-duration">${fmtDur(e.durationMs)}</div>
+        <button class="btn-icon edit" onclick='openEditModal(${JSON.stringify(e)})' title="Szerkesztés">✎</button>
+        <button class="btn-icon" onclick="deleteEntry('${e.id}')" title="Törlés">×</button>
+      </div>
+    `).join('');
+    html += `<div class="total-row"><span>Napi összesen</span><strong>${fmtDur(total)}</strong></div>`;
+  }
+  document.getElementById('content').innerHTML = html;
+}
+
+function deleteEntry(id) {
+  DB.deleteEntry(id);
+  renderContent();
+}
+
+// ── Report ────────────────────────────────────────────────────
+function getReportRange() {
+  if (reportFilter==='today') return [today().toISOString(), endOfDay(new Date()).toISOString()];
+  if (reportFilter==='week')  return [weekStart().toISOString(), endOfDay(new Date()).toISOString()];
+  if (reportFilter==='month') return [monthStart().toISOString(), endOfDay(new Date()).toISOString()];
+  return [new Date(reportFrom).toISOString(), endOfDay(new Date(reportTo)).toISOString()];
+}
+
+function renderReport() {
+  const [from, to] = getReportRange();
+  let entries = DB.getEntriesInRange(from, to);
+  if (clientFilter) entries = entries.filter(e=>(e.project||'').toLowerCase().includes(clientFilter.toLowerCase()));
+
+  const grouped = {};
+  for (const e of entries) {
+    const key = (e.project||'(nincs ügyfél)').toLowerCase();
+    if (!grouped[key]) grouped[key] = { display: e.project||'(nincs ügyfél)', items: [] };
+    grouped[key].items.push(e);
+  }
+  const groups = Object.values(grouped).sort((a,b)=>b.items.reduce((s,e)=>s+e.durationMs,0)-a.items.reduce((s,e)=>s+e.durationMs,0));
+  const grand = groups.reduce((s,g)=>s+g.items.reduce((a,e)=>a+e.durationMs,0),0);
+
+  let html = `
+    <div class="report-filters">
+      ${[['today','Ma'],['week','Hét'],['month','Hónap'],['custom','Egyéni']].map(([k,l])=>`
+        <button class="filter-btn ${reportFilter===k?'active':''}" onclick="setReportFilter('${k}')">${l}</button>
+      `).join('')}
+    </div>
+    ${reportFilter==='custom'?`
+      <div class="date-range">
+        <input type="date" value="${reportFrom}" onchange="reportFrom=this.value;renderContent()">
+        <span>→</span>
+        <input type="date" value="${reportTo}" onchange="reportTo=this.value;renderContent()">
+      </div>
+    `:''}
+    <input class="client-filter-input" placeholder="Szűrés ügyfél nevére..." value="${clientFilter}" oninput="clientFilter=this.value;renderContent()">
+    <div class="export-btns">
+      <button class="btn-export" onclick="exportReport('csv')">⬇ CSV export</button>
+      <button class="btn-export" onclick="exportReport('txt')">⬇ TXT export</button>
+    </div>
+  `;
+
+  if (groups.length === 0) {
+    html += `<div class="empty">${entries.length===0&&!clientFilter?'Nincs bejegyzés ebben az időszakban.':'Nincs találat a szűrőre.'}</div>`;
+  } else {
+    html += groups.map(g => {
+      const total = g.items.reduce((s,e)=>s+e.durationMs,0);
+      const key = g.display.toLowerCase();
+      const open = !!openGroups[key];
+      return `
+        <div class="report-project">
+          <div class="report-project-header" onclick="toggleGroup('${key}')">
+            <div>
+              <div class="report-project-name">${g.display}</div>
+              <div class="report-project-count">${g.items.length} bejegyzés</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="report-project-total">${fmtDur(total)}</span>
+              <span class="report-chevron">${open?'▲':'▼'}</span>
+            </div>
+          </div>
+          ${open?`<div class="report-entries">${g.items.map(e=>`
+            <div class="report-entry">
+              <div class="report-entry-info">${fmtDate(e.startedAt)} ${fmtTime(e.startedAt)}–${fmtTime(e.stoppedAt)}${e.task?` — ${e.task}`:''}</div>
+              <span class="report-entry-dur">${fmtDur(e.durationMs)}</span>
+              <button class="btn-icon edit" onclick='openEditModal(${JSON.stringify(e)})' title="Szerkesztés">✎</button>
+              <button class="btn-icon" onclick="deleteEntry('${e.id}');renderContent()" title="Törlés">×</button>
+            </div>
+          `).join('')}</div>`:''}
+        </div>
+      `;
+    }).join('');
+    html += `<div class="report-grand-total"><span>Összesen</span><span style="color:var(--accent)">${fmtDur(grand)}</span></div>`;
+  }
+
+  document.getElementById('content').innerHTML = html;
+}
+
+function setReportFilter(f) { reportFilter=f; renderContent(); }
+function toggleGroup(key) { openGroups[key]=!openGroups[key]; renderContent(); }
+
+// ── Export ────────────────────────────────────────────────────
+function exportReport(format) {
+  const [from, to] = getReportRange();
+  let entries = DB.getEntriesInRange(from, to);
+  if (clientFilter) entries = entries.filter(e=>(e.project||'').toLowerCase().includes(clientFilter.toLowerCase()));
+
+  let content, filename, type;
+  if (format === 'csv') {
+    const BOM = '﻿';
+    const rows = entries.map(e=>[e.project||'',e.task||'',fmtDate(e.startedAt),fmtTime(e.startedAt),fmtTime(e.stoppedAt),fmtDur(e.durationMs)].join(';'));
+    content = BOM + 'Ügyfél;Feladat;Dátum;Kezdés;Befejezés;Időtartam\n' + rows.join('\n');
+    filename = 'idomeroe-riport.csv'; type = 'text/csv;charset=utf-8';
+  } else {
+    const grouped = {};
+    for (const e of entries) {
+      const key = (e.project||'(nincs ügyfél)').toLowerCase();
+      if (!grouped[key]) grouped[key] = { display: e.project||'(nincs ügyfél)', items: [] };
+      grouped[key].items.push(e);
+    }
+    const lines = ['IDŐMÉRŐ RIPORT','='.repeat(40),''];
+    for (const { display, items } of Object.values(grouped)) {
+      const total = items.reduce((s,e)=>s+e.durationMs,0);
+      lines.push(`ÜGYFÉL: ${display}`, `Összesen: ${fmtDur(total)}`, '-'.repeat(30));
+      for (const e of items) lines.push(`  ${fmtDate(e.startedAt)}  ${e.task||'(nincs leírás)'}  →  ${fmtDur(e.durationMs)}`);
+      lines.push('');
+    }
+    const grand = entries.reduce((s,e)=>s+e.durationMs,0);
+    lines.push('='.repeat(40), `MINDÖSSZESEN: ${fmtDur(grand)}`);
+    content = lines.join('\r\n'); filename = 'idomeroe-riport.txt'; type = 'text/plain;charset=utf-8';
+  }
+
+  const blob = new Blob([content], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Edit / Manual Modal ───────────────────────────────────────
+function openEditModal(entry) {
+  const isNew = !entry;
+  const nowIso = new Date().toISOString();
+  const projects = DB.getProjects();
+  const tasks = DB.getTasks();
+  const proj = entry?.project || '';
+  const taskSugg = tasks[proj.toLowerCase()] || [];
+
+  const defDate = entry ? toDateStr(new Date(entry.startedAt)) : toDateStr(new Date());
+  const defStart = entry ? toTimeStr(entry.startedAt) : '09:00:00';
+  const defEnd   = entry ? toTimeStr(entry.stoppedAt)  : '10:00:00';
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <h3>${isNew ? '+ Manuális felvitel' : 'Bejegyzés szerkesztése'}</h3>
+        <div class="field">
+          <label>Ügyfél</label>
+          <input list="modal-proj-list" id="m-project" value="${proj}" placeholder="Ügyfél neve..." oninput="updateModalTasks(this.value)">
+          <datalist id="modal-proj-list">${projects.map(p=>`<option value="${p}">`).join('')}</datalist>
+        </div>
+        <div class="field">
+          <label>Feladat</label>
+          <input list="modal-task-list" id="m-task" value="${entry?.task||''}" placeholder="Feladat leírása...">
+          <datalist id="modal-task-list">${taskSugg.map(t=>`<option value="${t}">`).join('')}</datalist>
+        </div>
+        <div class="field">
+          <label>Dátum</label>
+          <input type="date" id="m-date" value="${defDate}" oninput="updateDurationPreview()">
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Kezdés</label><input type="time" step="1" id="m-start" value="${defStart}" oninput="updateDurationPreview()"></div>
+          <div class="field"><label>Befejezés</label><input type="time" step="1" id="m-end" value="${defEnd}" oninput="updateDurationPreview()"></div>
+        </div>
+        <div class="duration-preview" id="dur-preview">Időtartam: <strong>${fmtDur(3600000)}</strong></div>
+        <div class="modal-error" id="modal-error"></div>
+        <div class="modal-btns">
+          <button class="btn-save" onclick="saveEntry('${entry?.id||''}')">Mentés</button>
+          <button class="btn-cancel" onclick="document.getElementById('modal-container').innerHTML=''">Mégse</button>
+        </div>
+      </div>
+    </div>
+  `;
+  updateDurationPreview();
+}
+
+function updateModalTasks(project) {
+  const tasks = DB.getTasks();
+  const list = document.getElementById('modal-task-list');
+  if (list) list.innerHTML = (tasks[project.toLowerCase()]||[]).map(t=>`<option value="${t}">`).join('');
+}
+
+function updateDurationPreview() {
+  const date = document.getElementById('m-date')?.value;
+  const start = document.getElementById('m-start')?.value;
+  const end = document.getElementById('m-end')?.value;
+  if (!date||!start||!end) return;
+  const ms = Math.max(0, new Date(`${date}T${end}`)-new Date(`${date}T${start}`));
+  const el = document.getElementById('dur-preview');
+  if (el) el.innerHTML = `Időtartam: <strong>${fmtDur(ms)}</strong>`;
+}
+
+function saveEntry(existingId) {
+  const project = document.getElementById('m-project').value.trim();
+  const task = document.getElementById('m-task').value.trim();
+  const date = document.getElementById('m-date').value;
+  const start = document.getElementById('m-start').value;
+  const end = document.getElementById('m-end').value;
+  const errEl = document.getElementById('modal-error');
+
+  if (!date||!start||!end) { errEl.textContent='Tölts ki minden mezőt.'; return; }
+  const startedAt = new Date(`${date}T${start}`).toISOString();
+  const stoppedAt = new Date(`${date}T${end}`).toISOString();
+  if (new Date(stoppedAt) <= new Date(startedAt)) { errEl.textContent='A befejezés ideje legyen a kezdés után.'; return; }
+  const durationMs = new Date(stoppedAt) - new Date(startedAt);
+
+  if (existingId) {
+    DB.updateEntry(existingId, { project, task, startedAt, stoppedAt });
+  } else {
+    DB.addEntry({ project, task, startedAt, stoppedAt, durationMs });
+  }
+  document.getElementById('modal-container').innerHTML = '';
+  renderContent();
+}
+
+function closeModal(e) {
+  if (e.target.id === 'modal-overlay') document.getElementById('modal-container').innerHTML = '';
+}
+
+// ── Init ──────────────────────────────────────────────────────
+document.documentElement.classList.toggle('light', !darkMode);
+renderTabs();
+renderTimerBar();
+renderContent();
+</script>
+</body>
+</html>
