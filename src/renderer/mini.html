@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'" />
+  <title>Mini</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #16191f;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mini {
+      width: 240px;
+      background: #16191f;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      overflow: hidden;
+      -webkit-app-region: drag;
+    }
+
+    /* FUTÓ NÉZET */
+    .running-view {
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      height: 64px;
+      gap: 12px;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #5b8dee;
+      flex-shrink: 0;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+    .info { flex: 1; min-width: 0; }
+    .project-label {
+      font-size: 11px;
+      color: rgba(255,255,255,0.4);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .time {
+      font-size: 20px;
+      font-weight: 600;
+      color: #f0f2f8;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: .02em;
+      line-height: 1.2;
+    }
+
+    /* LEÁLLÍTOTT NÉZET */
+    .stopped-view {
+      padding: 10px 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .stopped-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2px;
+    }
+    .stopped-label {
+      font-size: 11px;
+      color: rgba(255,255,255,0.35);
+    }
+    .stopped-view input {
+      -webkit-app-region: no-drag;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 6px 10px;
+      color: #f0f2f8;
+      font-size: 12px;
+      outline: none;
+      width: 100%;
+      transition: border-color .15s;
+    }
+    .stopped-view input:focus { border-color: rgba(91,141,238,0.6); }
+    .stopped-view input::placeholder { color: rgba(255,255,255,0.25); }
+    .btn-start-mini {
+      -webkit-app-region: no-drag;
+      background: #5b8dee;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px;
+      cursor: pointer;
+      width: 100%;
+      transition: background .15s;
+    }
+    .btn-start-mini:hover { background: #4a7de0; }
+
+    /* KÖZÖS GOMBOK */
+    .btn-stop {
+      -webkit-app-region: no-drag;
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(224,92,92,0.6);
+      background: rgba(224,92,92,0.12);
+      color: #e05c5c;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background .15s, border-color .15s, color .15s;
+    }
+    .btn-stop:hover { background: #e05c5c; border-color: #e05c5c; color: #fff; }
+    .btn-open {
+      -webkit-app-region: no-drag;
+      background: none; border: none;
+      color: rgba(255,255,255,0.25);
+      cursor: pointer; font-size: 13px;
+      padding: 4px; border-radius: 6px;
+      transition: color .15s;
+      flex-shrink: 0;
+    }
+    .btn-open:hover { color: rgba(255,255,255,0.7); }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="mini">
+    <!-- Futó nézet -->
+    <div class="running-view" id="running-view">
+      <div class="dot"></div>
+      <div class="info">
+        <div class="project-label" id="project-label">Időmérés fut...</div>
+        <div class="time" id="time">00:00:00</div>
+      </div>
+      <button class="btn-open" id="btn-open" title="Megnyitás">⤢</button>
+      <button class="btn-stop" id="btn-stop" title="Megállítás">■</button>
+    </div>
+
+    <!-- Leállított nézet -->
+    <div class="stopped-view hidden" id="stopped-view">
+      <div class="stopped-header">
+        <span class="stopped-label">Időmérő</span>
+        <button class="btn-open" id="btn-open-stopped" title="Visszanagyítás">⤢</button>
+      </div>
+      <input id="input-project" placeholder="Ügyfél neve..." list="mini-projects" />
+      <datalist id="mini-projects"></datalist>
+      <input id="input-task" placeholder="Feladat..." />
+      <button class="btn-start-mini" id="btn-start">▶ Indítás</button>
+    </div>
+  </div>
+
+  <script>
+    const api = window.electronAPI;
+
+    function fmtMs(ms) {
+      const s = Math.floor(ms / 1000);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = s % 60;
+      return [h, m, sec].map(n => String(n).padStart(2, '0')).join(':');
+    }
+
+    function setView(state, elapsedMs, project) {
+      const running = state === 'RUNNING' || state === 'IDLE';
+      document.getElementById('running-view').classList.toggle('hidden', !running);
+      document.getElementById('stopped-view').classList.toggle('hidden', running);
+      if (running) {
+        document.getElementById('time').textContent = fmtMs(elapsedMs);
+        if (project) document.getElementById('project-label').textContent = project;
+        api.resizeMini(64);
+      } else {
+        api.resizeMini(138);
+      }
+    }
+
+    // betöltéskor
+    api.getTimerState().then(s => setView(s.state, s.elapsedMs, s.project));
+
+    // projektek az autocomplete-hez
+    api.getProjects().then(projects => {
+      const dl = document.getElementById('mini-projects');
+      projects.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        dl.appendChild(opt);
+      });
+    });
+
+    // élő frissítés
+    api.onTimerStateChanged(s => setView(s.state, s.elapsedMs, s.project));
+
+    document.getElementById('btn-stop').addEventListener('click', () => api.stopTimer());
+
+    document.getElementById('btn-start').addEventListener('click', () => {
+      const project = document.getElementById('input-project').value;
+      const task = document.getElementById('input-task').value;
+      api.startTimer(project, task);
+    });
+
+    document.getElementById('btn-open').addEventListener('click', () => api.openMainWindow());
+    document.getElementById('btn-open-stopped').addEventListener('click', () => api.openMainWindow());
+  </script>
+</body>
+</html>

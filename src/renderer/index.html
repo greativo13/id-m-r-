@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'" />
+  <title>Időmérő</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #16191f;
+      --surface2: #1e2128;
+      --surface3: #262b35;
+      --border: rgba(255,255,255,.07);
+      --border2: rgba(255,255,255,.12);
+      --text: #f0f2f8;
+      --text2: #9ba3b5;
+      --text3: #6a7385;
+      --accent: #5b8dee;
+      --accent-hover: #4a7de0;
+      --accent-dim: rgba(91,141,238,.12);
+      --danger: #e05c5c;
+      --danger-hover: #cc4a4a;
+      --danger-dim: rgba(224,92,92,.1);
+      --radius: 10px;
+      --radius-sm: 6px;
+      --shadow: 0 1px 3px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+    }
+    :root.light {
+      --bg: #f5f6f8;
+      --surface: #ffffff;
+      --surface2: #f0f1f4;
+      --surface3: #e8eaee;
+      --border: rgba(0,0,0,.07);
+      --border2: rgba(0,0,0,.12);
+      --text: #1a1d24;
+      --text2: #555e70;
+      --text3: #8a95a5;
+      --accent: #3d6fd4;
+      --accent-hover: #2f5ec0;
+      --accent-dim: rgba(61,111,212,.1);
+      --danger: #d44040;
+      --danger-hover: #c03030;
+      --danger-dim: rgba(212,64,64,.08);
+      --shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+      font-size: 14px;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #root { height: 100vh; display: flex; flex-direction: column; }
+
+    /* TABS */
+    .tabs {
+      display: flex;
+      align-items: center;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      padding: 0 4px;
+    }
+    .tab {
+      padding: 14px 18px;
+      cursor: pointer;
+      color: var(--text2);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: .01em;
+      transition: color .15s;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab:hover:not(.active) { color: var(--text); }
+    .tabs-spacer { flex: 1; }
+    .icon-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text2);
+      font-size: 15px;
+      transition: background .15s, color .15s;
+      margin: 0 2px;
+    }
+    .icon-btn:hover { background: var(--surface2); color: var(--text); }
+
+    /* TIMER BAR */
+    .timer-bar {
+      background: var(--surface);
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .timer-inputs { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .timer-bar input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 7px 11px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: border-color .15s, background .15s;
+      width: 100%;
+    }
+    .timer-bar input:focus { border-color: var(--border2); background: var(--surface3); }
+    .timer-bar input::placeholder { color: var(--text3); }
+    .timer-display {
+      font-size: 17px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: .02em;
+      min-width: 76px;
+      text-align: center;
+      color: var(--text2);
+      transition: color .2s;
+    }
+    .timer-display.running { color: var(--text); }
+    .btn-start {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background .15s, transform .1s;
+      font-weight: 700;
+    }
+    .btn-start:active { transform: scale(.93); }
+    .btn-start.start { background: var(--accent); color: #fff; }
+    .btn-start.start:hover { background: var(--accent-hover); }
+    .btn-start.stop { background: var(--danger-dim); color: var(--danger); border: 1px solid var(--danger); }
+    .btn-start.stop:hover { background: var(--danger); color: #fff; }
+
+    /* CONTENT */
+    .content { flex: 1; overflow-y: auto; padding: 20px 16px; }
+
+    /* ENTRIES */
+    .date-header {
+      color: var(--text3);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 10px;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0 2px;
+      border-top: 1px solid var(--border);
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--text2);
+    }
+    .total-row strong { color: var(--text); font-size: 13px; font-weight: 600; }
+    .entry {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: border-color .15s;
+    }
+    .entry:hover { border-color: var(--border2); }
+    .entry-project { font-weight: 600; font-size: 13px; color: var(--text); }
+    .entry-task { color: var(--text2); font-size: 12px; margin-top: 2px; }
+    .entry-time { font-size: 11px; color: var(--text3); white-space: nowrap; margin-top: 2px; }
+    .entry-duration { font-weight: 600; font-size: 12px; color: var(--text2); min-width: 60px; text-align: right; }
+    .entry-info { flex: 1; }
+    .btn-delete {
+      background: none;
+      border: none;
+      color: var(--text3);
+      cursor: pointer;
+      font-size: 15px;
+      width: 26px;
+      height: 26px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      transition: background .15s, color .15s;
+      flex-shrink: 0;
+    }
+    .btn-delete:hover { color: var(--danger); background: var(--danger-dim); }
+    .empty {
+      text-align: center;
+      color: var(--text3);
+      padding: 48px 0;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    /* REPORT */
+    .report-filters { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+    .filter-btn {
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text2);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all .15s;
+    }
+    .filter-btn:hover { border-color: var(--border2); color: var(--text); }
+    .filter-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+    .date-range { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
+    .date-range input[type=date] {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+      color-scheme: dark;
+      transition: border-color .15s;
+    }
+    :root.light .date-range input[type=date] { color-scheme: light; }
+    .date-range input[type=date]:focus { border-color: var(--border2); }
+    .date-range span { color: var(--text3); font-size: 12px; }
+    .export-btns { display: flex; gap: 8px; margin-bottom: 16px; }
+    .btn-export {
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border2);
+      color: var(--text2);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all .15s;
+    }
+    .btn-export:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+    .report-project {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 6px;
+      overflow: hidden;
+      transition: border-color .15s;
+    }
+    .report-project:hover { border-color: var(--border2); }
+    .report-project-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 14px;
+      cursor: pointer;
+    }
+    .report-project-name { font-weight: 600; font-size: 13px; }
+    .report-project-total { font-size: 13px; color: var(--accent); font-weight: 600; }
+    .report-project-count { font-size: 11px; color: var(--text3); margin-top: 2px; }
+    .report-chevron { color: var(--text3); font-size: 11px; margin-left: 8px; }
+    .report-entries { padding: 0 14px 10px; }
+    .report-entry {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text2);
+      gap: 12px;
+    }
+    .report-entry span:last-child { color: var(--text); font-weight: 500; white-space: nowrap; }
+    .report-grand-total {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 8px;
+      color: var(--text2);
+    }
+    .report-grand-total span:last-child { color: var(--accent); }
+
+    /* SETTINGS */
+    .settings-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .settings-row label { font-size: 13px; color: var(--text); }
+    .settings-row input[type=number] {
+      width: 72px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 7px 10px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      text-align: center;
+      transition: border-color .15s;
+    }
+    .settings-row input[type=number]:focus { border-color: var(--border2); }
+    .settings-hint { font-size: 11px; color: var(--text3); margin-top: -10px; margin-bottom: 20px; }
+    .btn-save {
+      width: 100%;
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-save:hover { background: var(--accent-hover); }
+
+    /* MODAL */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(2px);
+    }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 14px;
+      padding: 24px;
+      width: 310px;
+      box-shadow: var(--shadow);
+    }
+    .modal h3 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+    .modal p { color: var(--text2); font-size: 13px; margin-bottom: 20px; line-height: 1.6; }
+    .modal-btns { display: flex; gap: 8px; }
+    .modal-btns button {
+      flex: 1;
+      padding: 9px;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: opacity .15s;
+    }
+    .modal-btns button:hover { opacity: .85; }
+    .btn-keep { background: var(--accent); color: #fff; }
+    .btn-discard { background: var(--surface2); color: var(--text2); border: 1px solid var(--border) !important; }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="vendor/react.production.min.js"></script>
+  <script src="vendor/react-dom.production.min.js"></script>
+  <script src="vendor/babel.min.js"></script>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+    const api = window.electronAPI;
+
+    // ── helpers ───────────────────────────────────────────────
+    function fmtMs(ms) {
+      const s = Math.floor(ms / 1000);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = s % 60;
+      return [h, m, sec].map(n => String(n).padStart(2, '0')).join(':');
+    }
+    function fmtDur(ms) {
+      const s = Math.floor(ms / 1000);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = s % 60;
+      if (h > 0) return `${h}ó ${m}p ${sec}mp`;
+      if (m > 0) return `${m}p ${sec}mp`;
+      return `${sec}mp`;
+    }
+    function fmtTime(iso) {
+      return new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
+    }
+    function today() {
+      const d = new Date(); d.setHours(0,0,0,0); return d;
+    }
+    function weekStart() {
+      const d = today(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d;
+    }
+    function monthStart() {
+      const d = today(); d.setDate(1); return d;
+    }
+    function toISO(d) { return d.toISOString(); }
+    function endOfDay(d) { const e = new Date(d); e.setHours(23,59,59,999); return e; }
+    function toLocalDateStr(iso) {
+      const d = new Date(iso);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+    function toLocalTimeStr(iso) {
+      const d = new Date(iso);
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+    }
+
+    // ── EditEntryModal ────────────────────────────────────────
+    function EditEntryModal({ entry, onClose, onSaved }) {
+      const isNew = !entry;
+      const nowIso = new Date().toISOString();
+      const [project, setProject] = useState(entry?.project || '');
+      const [task, setTask] = useState(entry?.task || '');
+      const [date, setDate] = useState(entry ? toLocalDateStr(entry.startedAt) : toLocalDateStr(nowIso));
+      const [startT, setStartT] = useState(entry ? toLocalTimeStr(entry.startedAt) : '09:00:00');
+      const [endT, setEndT] = useState(entry ? toLocalTimeStr(entry.stoppedAt) : '10:00:00');
+      const [projects, setProjects] = useState([]);
+      const [taskSuggestions, setTaskSuggestions] = useState([]);
+      const [err, setErr] = useState('');
+
+      useEffect(() => { api.getProjects().then(setProjects); }, []);
+      useEffect(() => {
+        if (project) api.getTasksForProject(project).then(setTaskSuggestions);
+        else setTaskSuggestions([]);
+      }, [project]);
+
+      const startMs = new Date(`${date}T${startT}`).getTime();
+      const endMs   = new Date(`${date}T${endT}`).getTime();
+      const durationMs = Math.max(0, endMs - startMs);
+
+      const handleSave = async () => {
+        if (!date || !startT || !endT) { setErr('Tölts ki minden mezőt.'); return; }
+        if (endMs <= startMs) { setErr('A befejezés ideje legyen a kezdés után.'); return; }
+        const startedAt = new Date(`${date}T${startT}`).toISOString();
+        const stoppedAt = new Date(`${date}T${endT}`).toISOString();
+        if (isNew) {
+          await api.addManualEntry({ project, task, startedAt, stoppedAt });
+        } else {
+          await api.updateEntry(entry.id, { project, task, startedAt, stoppedAt });
+        }
+        onSaved();
+        onClose();
+      };
+
+      const inputStyle = {background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:'7px 10px',color:'var(--text)',fontSize:13,outline:'none',width:'100%',transition:'border-color .15s'};
+
+      return (
+        <div className="modal-overlay" onClick={onClose}>
+          <div className="modal" style={{width:360}} onClick={e => e.stopPropagation()}>
+            <h3 style={{marginBottom:16}}>{isNew ? '+ Manuális felvitel' : 'Bejegyzés szerkesztése'}</h3>
+
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:11,color:'var(--text3)',marginBottom:4}}>Ügyfél</div>
+              <input list="edit-project-list" style={inputStyle} value={project} onChange={e => setProject(e.target.value)} placeholder="Ügyfél neve..." />
+              <datalist id="edit-project-list">{projects.map(p => <option key={p} value={p}/>)}</datalist>
+            </div>
+
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:11,color:'var(--text3)',marginBottom:4}}>Feladat</div>
+              <input list="edit-task-list" style={inputStyle} value={task} onChange={e => setTask(e.target.value)} placeholder="Feladat leírása..." />
+              <datalist id="edit-task-list">{taskSuggestions.map(t => <option key={t} value={t}/>)}</datalist>
+            </div>
+
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:11,color:'var(--text3)',marginBottom:4}}>Dátum</div>
+              <input type="date" style={{...inputStyle,colorScheme:'dark'}} value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+
+            <div style={{display:'flex',gap:8,marginBottom:10}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:'var(--text3)',marginBottom:4}}>Kezdés</div>
+                <input type="time" step="1" style={inputStyle} value={startT} onChange={e => setStartT(e.target.value)} />
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:'var(--text3)',marginBottom:4}}>Befejezés</div>
+                <input type="time" step="1" style={inputStyle} value={endT} onChange={e => setEndT(e.target.value)} />
+              </div>
+            </div>
+
+            <div style={{textAlign:'center',fontSize:12,color:'var(--text2)',marginBottom:14,padding:'6px',background:'var(--surface2)',borderRadius:'var(--radius-sm)'}}>
+              Időtartam: <strong style={{color:'var(--text)'}}>{fmtDur(durationMs)}</strong>
+            </div>
+
+            {err && <div style={{fontSize:12,color:'var(--danger)',marginBottom:10}}>{err}</div>}
+
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn-save" style={{flex:1}} onClick={handleSave}>Mentés</button>
+              <button onClick={onClose} style={{flex:1,padding:'10px',borderRadius:'var(--radius-sm)',border:'1px solid var(--border)',background:'none',color:'var(--text2)',fontSize:13,fontWeight:600,cursor:'pointer'}}>Mégse</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── SettingsModal ─────────────────────────────────────────
+    function SettingsModal({ onClose }) {
+      const [minutes, setMinutes] = useState(30);
+      const [idleSec, setIdleSec] = useState(5);
+
+      useEffect(() => {
+        api.getSettings().then(s => {
+          setMinutes(s.reminderMinutes);
+          setIdleSec(s.idleSeconds ?? 300);
+        });
+      }, []);
+
+      const handleSave = async () => {
+        await api.setSettings({ reminderMinutes: Number(minutes), idleSeconds: Number(idleSec) });
+        onClose();
+      };
+
+      return (
+        <div className="modal-overlay" onClick={onClose}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3 style={{marginBottom:16}}>Beállítások</h3>
+            <div className="settings-row">
+              <label>Emlékeztető időköze</label>
+              <input type="number" min="0" max="480" value={minutes} onChange={e => setMinutes(e.target.value)} />
+            </div>
+            <p className="settings-hint">perc (0 = kikapcsolva)</p>
+            <div className="settings-row">
+              <label>Idle érzékelés küszöbe</label>
+              <input type="number" min="5" max="3600" value={idleSec} onChange={e => setIdleSec(e.target.value)} />
+            </div>
+            <p className="settings-hint">másodperc (alapértelmezett: 5)</p>
+            <button className="btn-save" onClick={handleSave}>Mentés</button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── IdleDialog ────────────────────────────────────────────
+    function IdleDialog({ idleMs, onResolve }) {
+      const mins = Math.round(idleMs / 60000) || 0;
+      const secs = Math.round(idleMs / 1000);
+      const label = secs < 60 ? `${secs} másodperc` : `${mins} perc`;
+      return (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Inaktivitás észlelve</h3>
+            <p>Nem volt aktivitás az elmúlt <strong>{label}</strong> alatt.<br/>Dolgoztál ez idő alatt?</p>
+            <div className="modal-btns">
+              <button className="btn-keep" onClick={() => onResolve('keep')}>Igen, számítson</button>
+              <button className="btn-discard" onClick={() => onResolve('discard')}>Nem, dobd el</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── ClientManagerModal ────────────────────────────────────
+    function ClientManagerModal({ onClose, onChanged }) {
+      const [projects, setProjects] = useState([]);
+      const [editing, setEditing] = useState(null); // {name, value}
+      const [tasks, setTasks] = useState({});
+
+      const load = async () => {
+        const ps = await api.getProjects();
+        setProjects(ps);
+        const t = {};
+        for (const p of ps) {
+          t[p] = await api.getTasksForProject(p);
+        }
+        setTasks(t);
+      };
+
+      useEffect(() => { load(); }, []);
+
+      const handleDeleteProject = async (name) => {
+        await api.deleteProject(name);
+        onChanged();
+        load();
+      };
+
+      const handleRename = async (oldName) => {
+        const newName = editing.value.trim();
+        if (!newName || newName === oldName) { setEditing(null); return; }
+        await api.renameProject(oldName, newName);
+        onChanged();
+        setEditing(null);
+        load();
+      };
+
+      const handleDeleteTask = async (project, task) => {
+        await api.deleteTask(project, task);
+        load();
+      };
+
+      return (
+        <div className="modal-overlay" onClick={onClose}>
+          <div className="modal" style={{width:360,maxHeight:'80vh',overflowY:'auto'}} onClick={e => e.stopPropagation()}>
+            <h3 style={{marginBottom:16}}>Ügyfelek kezelése</h3>
+            {projects.length === 0 && <p style={{color:'var(--text2)',fontSize:13}}>Még nincs mentett ügyfél.</p>}
+            {projects.map(p => (
+              <div key={p} style={{marginBottom:12,borderBottom:'1px solid var(--border)',paddingBottom:12}}>
+                <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
+                  {editing && editing.name === p
+                    ? <>
+                        <input
+                          style={{flex:1,background:'var(--surface2)',border:'1px solid var(--border2)',borderRadius:'var(--radius-sm)',padding:'5px 8px',color:'var(--text)',fontSize:13,outline:'none'}}
+                          value={editing.value}
+                          onChange={e => setEditing({...editing, value: e.target.value})}
+                          onKeyDown={e => { if (e.key==='Enter') handleRename(p); if (e.key==='Escape') setEditing(null); }}
+                          autoFocus
+                        />
+                        <button className="btn-save" style={{padding:'5px 10px',width:'auto'}} onClick={() => handleRename(p)}>✓</button>
+                        <button className="btn-discard" style={{padding:'5px 8px',borderRadius:'var(--radius-sm)',border:'1px solid var(--border)',background:'none',color:'var(--text2)',cursor:'pointer'}} onClick={() => setEditing(null)}>✕</button>
+                      </>
+                    : <>
+                        <span style={{flex:1,fontWeight:600,fontSize:13}}>{p}</span>
+                        <button className="btn-delete" title="Átnevezés" onClick={() => setEditing({name:p,value:p})}>✎</button>
+                        <button className="btn-delete" title="Törlés" onClick={() => handleDeleteProject(p)}>×</button>
+                      </>
+                  }
+                </div>
+                {(tasks[p]||[]).map(t => (
+                  <div key={t} style={{display:'flex',alignItems:'center',gap:6,padding:'3px 0 3px 12px'}}>
+                    <span style={{flex:1,fontSize:12,color:'var(--text2)'}}>{t}</span>
+                    <button className="btn-delete" title="Törlés" onClick={() => handleDeleteTask(p, t)}>×</button>
+                  </div>
+                ))}
+              </div>
+            ))}
+            <button className="btn-save" style={{marginTop:4}} onClick={onClose}>Bezárás</button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── TimerBar ──────────────────────────────────────────────
+    function TimerBar({ state, elapsedMs, onStart, onStop }) {
+      const [project, setProject] = useState('');
+      const [task, setTask] = useState('');
+      const [projects, setProjects] = useState([]);
+      const [tasks, setTasks] = useState([]);
+      const [showClientMgr, setShowClientMgr] = useState(false);
+      const running = state === 'RUNNING';
+      const idle = state === 'IDLE';
+
+      const loadProjects = () => api.getProjects().then(setProjects);
+
+      useEffect(() => { loadProjects(); }, []);
+
+      useEffect(() => {
+        if (project) api.getTasksForProject(project).then(setTasks);
+        else setTasks([]);
+      }, [project]);
+
+      const handleToggle = () => {
+        if (running || idle) { onStop(); }
+        else { onStart(project, task); }
+      };
+
+      return (
+        <>
+        <div className="timer-bar">
+          <div className="timer-inputs">
+            <div style={{display:'flex',gap:4}}>
+              <input
+                list="project-list"
+                placeholder="Ügyfél neve..."
+                value={project}
+                onChange={e => setProject(e.target.value)}
+                disabled={running || idle}
+                style={{flex:1}}
+              />
+              {!running && !idle && <button className="icon-btn" style={{flexShrink:0,width:28,height:28}} title="Ügyfelek kezelése" onClick={() => setShowClientMgr(true)}>⋯</button>}
+            </div>
+            <datalist id="project-list">
+              {projects.map(p => <option key={p} value={p}/>)}
+            </datalist>
+            <input
+              list="task-list"
+              placeholder="Feladat leírása..."
+              value={task}
+              onChange={e => setTask(e.target.value)}
+              disabled={running || idle}
+            />
+            <datalist id="task-list">
+              {tasks.map(t => <option key={t} value={t}/>)}
+            </datalist>
+          </div>
+          <div className={`timer-display ${running ? 'running' : ''}`}>{fmtMs(elapsedMs)}</div>
+          <button
+            className={`btn-start ${running || idle ? 'stop' : 'start'}`}
+            onClick={handleToggle}
+            title={running || idle ? 'Megállítás' : 'Indítás'}
+          >
+            {running || idle ? '■' : '▶'}
+          </button>
+        </div>
+        {showClientMgr && <ClientManagerModal onClose={() => setShowClientMgr(false)} onChanged={loadProjects} />}
+        </>
+      );
+    }
+
+    // ── EntryList ─────────────────────────────────────────────
+    function EntryList({ refresh, onEdit, onAddManual }) {
+      const [entries, setEntries] = useState([]);
+
+      const load = useCallback(() => {
+        api.getTodayEntries().then(setEntries);
+      }, []);
+
+      useEffect(() => { load(); }, [refresh]);
+
+      const handleDelete = async (id) => {
+        await api.deleteEntry(id);
+        load();
+      };
+
+      const total = entries.reduce((s, e) => s + e.durationMs, 0);
+
+      return (
+        <div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+            <div className="date-header" style={{marginBottom:0}}>Ma — {new Date().toLocaleDateString('hu-HU')}</div>
+            <button onClick={onAddManual} style={{fontSize:12,padding:'4px 10px',borderRadius:'var(--radius-sm)',border:'1px solid var(--border)',background:'none',color:'var(--text2)',cursor:'pointer',display:'flex',alignItems:'center',gap:4,transition:'all .15s'}}
+              onMouseOver={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.color='var(--accent)'}}
+              onMouseOut={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.color='var(--text2)'}}>
+              + Manuális
+            </button>
+          </div>
+          {entries.length === 0
+            ? <div className="empty" style={{paddingTop:32}}>Még nincs mai bejegyzés.<br/>Indítsd el az időmérőt!</div>
+            : <>
+              {entries.slice().reverse().map(e => (
+                <div className="entry" key={e.id}>
+                  <div className="entry-info">
+                    <div className="entry-project">{e.project || <span style={{color:'var(--text2)'}}>Névtelen</span>}</div>
+                    {e.task && <div className="entry-task">{e.task}</div>}
+                    <div className="entry-time">{fmtTime(e.startedAt)} – {fmtTime(e.stoppedAt)}</div>
+                  </div>
+                  <div className="entry-duration">{fmtDur(e.durationMs)}</div>
+                  <button className="btn-delete" onClick={() => onEdit(e)} title="Szerkesztés" style={{fontSize:13}}>✎</button>
+                  <button className="btn-delete" onClick={() => handleDelete(e.id)} title="Törlés">×</button>
+                </div>
+              ))}
+              <div className="total-row">
+                <span>Napi összesen</span>
+                <strong>{fmtDur(total)}</strong>
+              </div>
+            </>
+          }
+        </div>
+      );
+    }
+
+    // ── Report ────────────────────────────────────────────────
+    const FILTERS = [
+      { label: 'Ma', key: 'today' },
+      { label: 'Hét', key: 'week' },
+      { label: 'Hónap', key: 'month' },
+      { label: 'Egyéni', key: 'custom' },
+    ];
+
+    function ReportProjectRow({ project, entries, onDelete, onEdit }) {
+      const [open, setOpen] = useState(false);
+      const total = entries.reduce((s, e) => s + e.durationMs, 0);
+      return (
+        <div className="report-project">
+          <div className="report-project-header" onClick={() => setOpen(o => !o)}>
+            <div>
+              <div className="report-project-name">{project}</div>
+              <div className="report-project-count">{entries.length} bejegyzés</div>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <span className="report-project-total">{fmtDur(total)}</span>
+              <span className="report-chevron">{open ? '▲' : '▼'}</span>
+            </div>
+          </div>
+          {open && (
+            <div className="report-entries">
+              {entries.map(e => (
+                <div className="report-entry" key={e.id}>
+                  <span style={{flex:1}}>{new Date(e.startedAt).toLocaleDateString('hu-HU')} {fmtTime(e.startedAt)}–{fmtTime(e.stoppedAt)}{e.task && ` — ${e.task}`}</span>
+                  <span>{fmtDur(e.durationMs)}</span>
+                  <button className="btn-delete" onClick={() => onEdit(e)} title="Szerkesztés" style={{fontSize:13}}>✎</button>
+                  <button className="btn-delete" onClick={() => onDelete(e.id)} title="Törlés">×</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function Report({ onEdit }) {
+      const [filter, setFilter] = useState('today');
+      const [entries, setEntries] = useState([]);
+      const [customFrom, setCustomFrom] = useState(() => today().toISOString().slice(0,10));
+      const [customTo, setCustomTo] = useState(() => new Date().toISOString().slice(0,10));
+      const [clientFilter, setClientFilter] = useState('');
+
+      const getRange = useCallback(() => {
+        const now = new Date();
+        if (filter === 'today') return [toISO(today()), toISO(endOfDay(now))];
+        if (filter === 'week')  return [toISO(weekStart()), toISO(endOfDay(now))];
+        if (filter === 'month') return [toISO(monthStart()), toISO(endOfDay(now))];
+        return [toISO(new Date(customFrom)), toISO(endOfDay(new Date(customTo)))];
+      }, [filter, customFrom, customTo]);
+
+      useEffect(() => {
+        const [from, to] = getRange();
+        api.getEntriesInRange(from, to).then(setEntries);
+      }, [getRange]);
+
+      // case-insensitive csoportosítás + névre szűrés
+      const grouped = entries.reduce((acc, e) => {
+        const display = e.project || '(nincs ügyfél)';
+        const key = display.toLowerCase();
+        if (!acc[key]) acc[key] = { display, items: [] };
+        acc[key].items.push(e);
+        return acc;
+      }, {});
+
+      const filteredGroups = Object.values(grouped).filter(g =>
+        !clientFilter || g.display.toLowerCase().includes(clientFilter.toLowerCase())
+      );
+
+      const grandTotal = filteredGroups.reduce((s, g) => s + g.items.reduce((a,e) => a+e.durationMs, 0), 0);
+
+      const handleExport = async (format) => {
+        const [from, to] = getRange();
+        const res = await api.exportReport(format, from, to, clientFilter);
+        if (res && res.filepath) alert(`Mentve: ${res.filepath}`);
+      };
+
+      const handleDelete = async (id) => {
+        await api.deleteEntry(id);
+        const [from, to] = getRange();
+        api.getEntriesInRange(from, to).then(setEntries);
+      };
+
+      return (
+        <div>
+          <div className="report-filters">
+            {FILTERS.map(f => (
+              <button key={f.key} className={`filter-btn ${filter === f.key ? 'active' : ''}`} onClick={() => setFilter(f.key)}>{f.label}</button>
+            ))}
+          </div>
+
+          {filter === 'custom' && (
+            <div className="date-range">
+              <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} />
+              <span>→</span>
+              <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} />
+            </div>
+          )}
+
+          <input
+            placeholder="Szűrés ügyfél nevére..."
+            value={clientFilter}
+            onChange={e => setClientFilter(e.target.value)}
+            style={{width:'100%',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:'7px 11px',color:'var(--text)',fontSize:13,outline:'none',marginBottom:12}}
+          />
+
+          <div className="export-btns">
+            <button className="btn-export" onClick={() => handleExport('csv')}>⬇ CSV export</button>
+            <button className="btn-export" onClick={() => handleExport('txt')}>⬇ TXT export</button>
+          </div>
+
+          {filteredGroups.length === 0
+            ? <div className="empty">{entries.length === 0 ? 'Nincs bejegyzés ebben az időszakban.' : 'Nincs találat a szűrőre.'}</div>
+            : <>
+                {filteredGroups
+                  .sort((a, b) => b.items.reduce((s,e)=>s+e.durationMs,0) - a.items.reduce((s,e)=>s+e.durationMs,0))
+                  .map(g => (
+                    <ReportProjectRow key={g.display.toLowerCase()} project={g.display} entries={g.items} onDelete={handleDelete} onEdit={onEdit} />
+                  ))
+                }
+                <div className="report-grand-total">
+                  <span>Összesen</span>
+                  <span style={{color:'var(--accent)'}}>{fmtDur(grandTotal)}</span>
+                </div>
+              </>
+          }
+        </div>
+      );
+    }
+
+    // ── App ───────────────────────────────────────────────────
+    function App() {
+      const [tab, setTab] = useState('timer');
+      const [dark, setDark] = useState(true);
+      const [showSettings, setShowSettings] = useState(false);
+      const [editEntry, setEditEntry] = useState(null);   // null=closed, false=new, object=edit
+      const openEdit = (entry) => setEditEntry(entry);
+      const openManual = () => setEditEntry(false);
+
+      useEffect(() => {
+        document.documentElement.classList.toggle('light', !dark);
+      }, [dark]);
+      const [timerState, setTimerState] = useState({ state: 'STOPPED', elapsedMs: 0, project: '', task: '' });
+      const [idleData, setIdleData] = useState(null);
+      const [refresh, setRefresh] = useState(0);
+      const idleStartRef = useRef(null);
+
+      useEffect(() => {
+        api.getTimerState().then(s => setTimerState(s));
+
+        const handleState = (data) => {
+          setTimerState(data);
+          if (data.state === 'STOPPED') setRefresh(r => r + 1);
+        };
+        const handleIdle = (data) => {
+          idleStartRef.current = data.idleSince;
+          setIdleData(data);
+        };
+
+        api.onTimerStateChanged(handleState);
+        api.onIdleDetected(handleIdle);
+
+        return () => {
+          api.removeListener('timer:state-changed', handleState);
+          api.removeListener('idle:detected', handleIdle);
+        };
+      }, []);
+
+      const handleStart = (project, task) => api.startTimer(project, task);
+      const handleStop = () => api.stopTimer().then(() => setRefresh(r => r + 1));
+
+      const handleResolve = async (action) => {
+        const idleMs = idleStartRef.current ? Date.now() - idleStartRef.current : 0;
+        setIdleData(null);
+        idleStartRef.current = null;
+        await api.resolveIdle(action);
+        if (action === 'discard') setRefresh(r => r + 1);
+      };
+
+      return (
+        <div id="root-inner" style={{display:'flex',flexDirection:'column',height:'100vh'}}>
+          <div className="tabs">
+            <div className={`tab ${tab === 'timer' ? 'active' : ''}`} onClick={() => setTab('timer')}>Időmérő</div>
+            <div className={`tab ${tab === 'report' ? 'active' : ''}`} onClick={() => setTab('report')}>Riport</div>
+            <div className="tabs-spacer" />
+            <button className="icon-btn" onClick={() => setDark(d => !d)} title="Téma váltás">{dark ? '☀' : '☾'}</button>
+            <button className="icon-btn" onClick={() => setShowSettings(true)} title="Beállítások">⚙</button>
+          </div>
+
+          <TimerBar
+            state={timerState.state}
+            elapsedMs={timerState.elapsedMs}
+            onStart={handleStart}
+            onStop={handleStop}
+          />
+
+          <div className="content">
+            {tab === 'timer' && <EntryList refresh={refresh} onEdit={openEdit} onAddManual={openManual} />}
+            {tab === 'report' && <Report onEdit={openEdit} />}
+          </div>
+
+          {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+          {editEntry !== null && (
+            <EditEntryModal
+              entry={editEntry || null}
+              onClose={() => setEditEntry(null)}
+              onSaved={() => setRefresh(r => r + 1)}
+            />
+          )}
+          {idleData && (
+            <IdleDialog
+              idleMs={idleStartRef.current ? Date.now() - idleStartRef.current : 0}
+              onResolve={handleResolve}
+            />
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

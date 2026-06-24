@@ -1,0 +1,48 @@
+{
+  "name": "idomeroe",
+  "version": "2.0.0",
+  "description": "Toggl-szerű időmérő idle detekcióval",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0",
+    "uiohook-napi": "^1.5.4"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "hu.idomeroe.app",
+    "productName": "Időmérő",
+    "directories": {
+      "output": "dist-build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Időmérő"
+    },
+    "asarUnpack": [
+      "**/uiohook-napi/**",
+      "**/electron-store/**"
+    ]
+  }
+}
