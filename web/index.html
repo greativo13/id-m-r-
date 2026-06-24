@@ -264,6 +264,8 @@ function renderTabs() {
     <div class="tab ${activeTab==='report'?'active':''}" onclick="setTab('report')">Riport</div>
     <div class="tabs-spacer"></div>
     <button class="icon-btn" onclick="toggleTheme()" title="Téma">${darkMode?'☀':'☾'}</button>
+    <button class="icon-btn" onclick="triggerImport()" title="Adatok importálása">⬆</button>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJson(this)">
   `;
 }
 function setTab(t) { activeTab=t; renderTabs(); renderContent(); }
@@ -568,6 +570,60 @@ function saveEntry(existingId) {
 
 function closeModal(e) {
   if (e.target.id === 'modal-overlay') document.getElementById('modal-container').innerHTML = '';
+}
+
+// ── Import ────────────────────────────────────────────────────
+function triggerImport() {
+  document.getElementById('import-file').click();
+}
+
+function importJson(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const entries = data.entries || [];
+      const projects = data.projects || [];
+      const tasks = data.tasks || {};
+      if (!Array.isArray(entries)) throw new Error('Hibás formátum');
+
+      // Meglévő adatokhoz hozzáadjuk (duplikátumokat kiszűrjük)
+      const existing = DB.getEntries();
+      const existingIds = new Set(existing.map(e => e.id));
+      const newEntries = entries.filter(e => !existingIds.has(e.id));
+      DB.saveEntries([...existing, ...newEntries]);
+
+      // Projekteket mergeljük
+      const existingProjects = DB.getProjects();
+      for (const p of projects) {
+        if (!existingProjects.find(ep => ep.toLowerCase() === p.toLowerCase())) {
+          existingProjects.push(p);
+        }
+      }
+      DB.saveProjects(existingProjects);
+
+      // Feladatokat mergeljük
+      const existingTasks = DB.getTasks();
+      for (const [key, taskList] of Object.entries(tasks)) {
+        if (!existingTasks[key]) existingTasks[key] = [];
+        for (const t of taskList) {
+          if (!existingTasks[key].find(et => et.toLowerCase() === t.toLowerCase())) {
+            existingTasks[key].push(t);
+          }
+        }
+      }
+      DB.saveTasks(existingTasks);
+
+      input.value = '';
+      alert(`Importálva: ${newEntries.length} új bejegyzés`);
+      renderContent();
+    } catch(err) {
+      alert('Hiba: nem sikerült az importálás. Biztos hogy entries.json fájlt töltöttél fel?');
+    }
+  };
+  reader.readAsText(file);
 }
 
 // ── Init ──────────────────────────────────────────────────────
